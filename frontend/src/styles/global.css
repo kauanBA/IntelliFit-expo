@@ -1556,3 +1556,173 @@ label {
     color: #4b5563;
     font-size: 0.875em;
 }
+
+/*
+   ÁREA ADMINISTRATIVA
+
+   Define a identidade visual do painel administrativo,
+   incluindo indicadores, listagem de usuários e status
+   dos perfis cadastrados.
+*/
+
+.admin-page {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.admin-header {
+    margin-bottom: 32px;
+}
+
+.admin-header h1 {
+    margin: 0 0 8px;
+    color: #1F2937;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.admin-header p {
+    margin: 0;
+    color: #6B7280;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.admin-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 36px;
+}
+
+.admin-stat-card {
+    padding: 22px 24px;
+    background-color: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.admin-stat-card:hover {
+    border-color: #D1D5DB;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+}
+
+.admin-stat-card span {
+    display: block;
+    margin-bottom: 12px;
+    color: #6B7280;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.admin-stat-card strong {
+    color: #1F2937;
+    font-size: 30px;
+    line-height: 1;
+}
+
+.admin-section {
+    margin-top: 32px;
+}
+
+.admin-section-header {
+    margin-bottom: 18px;
+}
+
+.admin-section-header h2 {
+    margin: 0 0 6px;
+    color: #1F2937;
+    font-size: 20px;
+}
+
+.admin-section-header p {
+    margin: 0;
+    color: #6B7280;
+    font-size: 14px;
+}
+
+.admin-table-container {
+    width: 100%;
+    overflow-x: auto;
+    background-color: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+}
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.admin-table th {
+    padding: 15px 18px;
+    background-color: #F9FAFB;
+    color: #6B7280;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+}
+
+.admin-table td {
+    padding: 15px 18px;
+    border-top: 1px solid #E5E7EB;
+    color: #374151;
+    font-size: 14px;
+}
+
+.admin-table tbody tr:hover {
+    background-color: #F9FAFB;
+}
+
+.admin-role {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.admin-role.admin {
+    background-color: #E8F5E9;
+    color: #2E7D32;
+}
+
+.admin-role.user {
+    background-color: #F3F4F6;
+    color: #4B5563;
+}
+
+.admin-feedback {
+    padding: 18px;
+    border: 1px solid #E5E7EB;
+    border-radius: 10px;
+    background-color: #FFFFFF;
+    color: #6B7280;
+    font-size: 14px;
+}
+
+.admin-feedback.error {
+    border-color: #FECACA;
+    background-color: #FEF2F2;
+    color: #B91C1C;
+}
+
+@media (max-width: 768px) {
+
+    .admin-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-header h1 {
+        font-size: 24px;
+    }
+
+    .admin-table {
+        min-width: 600px;
+    }
+}

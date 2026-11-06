@@ -1,3 +1,4 @@
+
 import bcrypt from "bcrypt";
 import { UserRepository } from "../repositories/user.repository";
 import jwt from "jsonwebtoken";
@@ -26,7 +27,6 @@ export class AuthService {
             );
         }
 
-
         const existingUser = await this.userRepository.findByEmail(email);
 
         if (existingUser) {
@@ -49,17 +49,11 @@ export class AuthService {
         };
     }
 
-    public async getCurrentUser(
-        userId: number
-    ) {
-
-        const user =
-            await this.userRepository.findById(userId);
+    public async getCurrentUser(userId: number) {
+        const user = await this.userRepository.findById(userId);
 
         if (!user) {
-            throw new Error(
-                "Usuário não encontrado."
-            );
+            throw new Error("Usuário não encontrado.");
         }
 
         return {
@@ -71,11 +65,8 @@ export class AuthService {
     }
 
     public async login(email: string, password: string) {
-
         if (!email || !password) {
-            throw new Error(
-                "E-mail e senha são obrigatórios."
-            );
+            throw new Error("E-mail e senha são obrigatórios.");
         }
 
         const user = await this.userRepository.findByEmail(email);
@@ -113,5 +104,61 @@ export class AuthService {
             },
             token
         };
+    }
+
+    // Altera a senha do usuário autenticado.
+    public async changePassword(
+        userId: number,
+        currentPassword: string,
+        newPassword: string
+    ): Promise<void> {
+
+        if (!currentPassword || !newPassword) {
+            throw new Error(
+                "A senha atual e a nova senha são obrigatórias."
+            );
+        }
+
+        if (newPassword.length < 8) {
+            throw new Error(
+                "A nova senha deve possuir pelo menos 8 caracteres."
+            );
+        }
+
+        const user = await this.userRepository.findById(userId);
+
+        if (!user) {
+            throw new Error("Usuário não encontrado.");
+        }
+
+        const currentPasswordMatch = await bcrypt.compare(
+            currentPassword,
+            user.password
+        );
+
+        if (!currentPasswordMatch) {
+            throw new Error("A senha atual está incorreta.");
+        }
+
+        const samePassword = await bcrypt.compare(
+            newPassword,
+            user.password
+        );
+
+        if (samePassword) {
+            throw new Error(
+                "A nova senha deve ser diferente da senha atual."
+            );
+        }
+
+        const hashedPassword = await bcrypt.hash(
+            newPassword,
+            10
+        );
+
+        await this.userRepository.updatePassword(
+            userId,
+            hashedPassword
+        );
     }
 }

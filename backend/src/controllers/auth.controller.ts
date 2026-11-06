@@ -1,3 +1,4 @@
+
 import { Request, Response, NextFunction } from "express";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { AuthService } from "../services/auth.service";
@@ -34,29 +35,25 @@ export class AuthController {
         res: Response,
         next: NextFunction
     ): Promise<void> => {
-
         try {
-
             if (!req.userId) {
-                throw new Error(
-                    "Usuário não autenticado."
-                );
+                throw new Error("Usuário não autenticado.");
             }
 
             const user =
-                await this.authService.getCurrentUser(
-                    req.userId
-                );
+                await this.authService.getCurrentUser(req.userId);
 
             res.json(user);
-
         } catch (error) {
             next(error);
         }
     };
 
     public login = async (
-        req: Request, res: Response, next: NextFunction): Promise<void> => {
+        req: Request,
+        res: Response,
+        next: NextFunction
+    ): Promise<void> => {
         try {
             const { email, password } = req.body;
 
@@ -66,6 +63,33 @@ export class AuthController {
             );
 
             res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    // Altera a senha do usuário autenticado.
+    public changePassword = async (
+        req: AuthRequest,
+        res: Response,
+        next: NextFunction
+    ): Promise<void> => {
+        try {
+            if (!req.userId) {
+                throw new Error("Usuário não autenticado.");
+            }
+
+            const { currentPassword, newPassword } = req.body;
+
+            await this.authService.changePassword(
+                req.userId,
+                currentPassword,
+                newPassword
+            );
+
+            res.status(200).json({
+                message: "Senha alterada com sucesso."
+            });
         } catch (error) {
             next(error);
         }

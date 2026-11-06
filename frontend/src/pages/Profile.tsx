@@ -1,6 +1,11 @@
+
 import { useEffect, useState } from "react";
 
-import { getCurrentUser, type CurrentUser } from "../services/authService";
+import {
+    getCurrentUser,
+    changePassword,
+    type CurrentUser
+} from "../services/authService";
 
 function Profile() {
 
@@ -8,6 +13,24 @@ function Profile() {
         useState<CurrentUser | null>(null);
 
     const [error, setError] =
+        useState("");
+
+    const [success, setSuccess] =
+        useState("");
+
+    const [isChangingPassword, setIsChangingPassword] =
+        useState(false);
+
+    const [showPasswordForm, setShowPasswordForm] =
+        useState(false);
+
+    const [currentPassword, setCurrentPassword] =
+        useState("");
+
+    const [newPassword, setNewPassword] =
+        useState("");
+
+    const [confirmPassword, setConfirmPassword] =
         useState("");
 
     useEffect(() => {
@@ -37,6 +60,88 @@ function Profile() {
 
     }, []);
 
+    // Abre ou fecha o formulário de alteração de senha.
+    function togglePasswordForm() {
+
+        if (isChangingPassword) {
+            return;
+        }
+
+        setShowPasswordForm(!showPasswordForm);
+
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+
+        setError("");
+        setSuccess("");
+    }
+
+    // Envia a solicitação de alteração de senha ao backend.
+    async function handlePasswordSubmit(
+        event: React.FormEvent<HTMLFormElement>
+    ) {
+
+        event.preventDefault();
+
+        setError("");
+        setSuccess("");
+
+        if (newPassword !== confirmPassword) {
+            setError(
+                "A confirmação da nova senha não corresponde."
+            );
+            return;
+        }
+
+        if (newPassword.length < 8) {
+            setError(
+                "A nova senha deve ter pelo menos 8 caracteres."
+            );
+            return;
+        }
+
+        if (currentPassword === newPassword) {
+            setError(
+                "A nova senha deve ser diferente da senha atual."
+            );
+            return;
+        }
+
+        try {
+
+            setIsChangingPassword(true);
+
+            const result = await changePassword({
+                currentPassword,
+                newPassword
+            });
+
+            setSuccess(
+                result.message || "Senha alterada com sucesso."
+            );
+
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+
+            setShowPasswordForm(false);
+
+        } catch (error) {
+
+            if (error instanceof Error) {
+                setError(error.message);
+            } else {
+                setError("Erro ao alterar senha.");
+            }
+
+        } finally {
+
+            setIsChangingPassword(false);
+
+        }
+    }
+
     return (
         <div className="page-container">
 
@@ -54,6 +159,12 @@ function Profile() {
             {error && (
                 <p className="form-error">
                     {error}
+                </p>
+            )}
+
+            {success && (
+                <p className="form-success">
+                    {success}
                 </p>
             )}
 
@@ -112,12 +223,105 @@ function Profile() {
                     <div className="profile-actions">
 
                         <button
+                            type="button"
                             className="button-secondary"
+                            onClick={togglePasswordForm}
+                            disabled={isChangingPassword}
                         >
-                            Alterar senha
+                            {showPasswordForm
+                                ? "Cancelar"
+                                : "Alterar senha"}
                         </button>
 
                     </div>
+
+                    {showPasswordForm && (
+
+                        <form
+                            className="form-card"
+                            onSubmit={handlePasswordSubmit}
+                        >
+
+                            <h3>Alterar senha</h3>
+
+                            <div className="form-group">
+
+                                <label htmlFor="currentPassword">
+                                    Senha atual
+                                </label>
+
+                                <input
+                                    id="currentPassword"
+                                    type="password"
+                                    value={currentPassword}
+                                    onChange={(event) =>
+                                        setCurrentPassword(event.target.value)
+                                    }
+                                    autoComplete="current-password"
+                                    required
+                                    disabled={isChangingPassword}
+                                />
+
+                            </div>
+
+                            <div className="form-group">
+
+                                <label htmlFor="newPassword">
+                                    Nova senha
+                                </label>
+
+                                <input
+                                    id="newPassword"
+                                    type="password"
+                                    value={newPassword}
+                                    onChange={(event) =>
+                                        setNewPassword(event.target.value)
+                                    }
+                                    autoComplete="new-password"
+                                    minLength={8}
+                                    required
+                                    disabled={isChangingPassword}
+                                />
+
+                            </div>
+
+                            <div className="form-group">
+
+                                <label htmlFor="confirmPassword">
+                                    Confirmar nova senha
+                                </label>
+
+                                <input
+                                    id="confirmPassword"
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={(event) =>
+                                        setConfirmPassword(event.target.value)
+                                    }
+                                    autoComplete="new-password"
+                                    minLength={8}
+                                    required
+                                    disabled={isChangingPassword}
+                                />
+
+                            </div>
+
+                            <div className="form-actions">
+
+                                <button
+                                    type="submit"
+                                    disabled={isChangingPassword}
+                                >
+                                    {isChangingPassword
+                                        ? "Alterando senha..."
+                                        : "Salvar nova senha"}
+                                </button>
+
+                            </div>
+
+                        </form>
+
+                    )}
 
                 </div>
 

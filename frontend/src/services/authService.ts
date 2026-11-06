@@ -1,3 +1,4 @@
+
 /*
    SERVIÇO DE AUTENTICAÇÃO
 
@@ -7,13 +8,10 @@
    - login: autentica um usuário e recebe seu token JWT.
    - register: cadastra um novo usuário.
    - getCurrentUser: consulta os dados do usuário autenticado.
+   - changePassword: altera a senha do usuário autenticado.
 
    Este serviço é responsável pela comunicação entre o
    frontend e os endpoints de autenticação da API.
-
-   As páginas e componentes utilizam essas funções para
-   realizar as operações de autenticação sem precisar
-   implementar diretamente as requisições HTTP.
 */
 
 import API_URL from "./api";
@@ -33,16 +31,8 @@ interface LoginResponse {
     token: string;
 }
 
-/* 
+/*
    Realiza a autenticação do usuário através da API.
-
-   Envia o e-mail e a senha para o endpoint de login e,
-   em caso de sucesso, retorna os dados do usuário junto
-   com o token JWT utilizado nas requisições autenticadas.
-
-   Em caso de erro, utiliza a mensagem retornada pela API
-   para informar o problema ao componente que realizou
-   a chamada.
 */
 
 export async function login(
@@ -79,14 +69,8 @@ export interface RegisterData {
     password: string;
 }
 
-/* 
+/*
    Realiza o cadastro de um novo usuário através da API.
-
-   Envia nome, e-mail e senha para o endpoint de cadastro
-   e retorna a resposta da API após a criação do usuário.
-
-   Caso o cadastro não seja realizado, lança um erro com
-   a mensagem retornada pelo backend.
 */
 
 export async function register(
@@ -125,16 +109,8 @@ export interface CurrentUser {
     role: string;
 }
 
-/* 
+/*
    Busca os dados do usuário atualmente autenticado.
-
-   Recupera o token JWT armazenado no navegador e o envia
-   no cabeçalho Authorization para o endpoint /me da API.
-
-   Em caso de sucesso, retorna os dados do usuário.
-   Caso o token seja inválido ou ocorra outro erro na API,
-   lança um erro para ser tratado pelo componente que
-   realizou a chamada.
 */
 
 export async function getCurrentUser(): Promise<CurrentUser> {
@@ -158,6 +134,58 @@ export async function getCurrentUser(): Promise<CurrentUser> {
         throw new Error(
             result.error ||
             "Erro ao buscar dados do usuário."
+        );
+    }
+
+    return result;
+}
+
+interface ChangePasswordData {
+    currentPassword: string;
+    newPassword: string;
+}
+
+/*
+   Altera a senha do usuário autenticado.
+
+   Envia a senha atual e a nova senha para a API,
+   utilizando o token JWT armazenado no navegador.
+
+   Em caso de erro, lança a mensagem retornada pelo backend.
+*/
+
+export async function changePassword(
+    data: ChangePasswordData
+): Promise<{ message: string }> {
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+        throw new Error(
+            "Sua sessão expirou. Faça login novamente."
+        );
+    }
+
+    const response = await fetch(
+        `${API_URL}/api/auth/change-password`,
+        {
+            method: "PUT",
+
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`
+            },
+
+            body: JSON.stringify(data)
+        }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            result.error ||
+            "Erro ao alterar senha."
         );
     }
 

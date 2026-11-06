@@ -1,3 +1,4 @@
+
 import { Router } from "express";
 import { AuthController } from "../controllers/auth.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
@@ -107,6 +108,48 @@ router.get(
     "/me",
     authMiddleware,
     authController.getCurrentUser
+);
+
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   put:
+ *     summary: Alterar senha do usuário autenticado
+ *     description: Confere a senha atual e atualiza a senha após validar os dados.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: senhaAtual123
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *                 example: novaSenha123
+ *     responses:
+ *       200:
+ *         description: Senha alterada com sucesso
+ *       400:
+ *         description: Dados inválidos ou senha atual incorreta
+ *       401:
+ *         description: Token ausente, inválido ou expirado
+ */
+router.put(
+    "/change-password",
+    authMiddleware,
+    authController.changePassword
 );
 
 export default router;
