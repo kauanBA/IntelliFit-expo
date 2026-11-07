@@ -57,19 +57,58 @@ function expirationDays(value: unknown): number {
     return daysUntilExpiration(String(value ?? ""));
 }
 
+/**
+ * Palavras que descrevem estado, corte ou variação do ingrediente sem mudar
+ * o que ele é: "whole milk" ainda é leite, "chicken breast" ainda é frango.
+ * Qualquer outra palavra extra muda o ingrediente: "coconut milk" não é leite,
+ * "condensed milk" não é leite, "peanut butter" não é manteiga.
+ */
+const NEUTRAL_DESCRIPTORS = new Set([
+    "fresh", "frozen", "raw", "ripe", "large", "small", "medium", "big",
+    "whole", "skimmed", "semi", "low", "fat", "free", "light", "lean",
+    "plain", "unsalted", "salted", "organic", "extra", "virgin",
+    "chopped", "sliced", "diced", "grated", "shredded", "minced", "ground",
+    "peeled", "boneless", "skinless",
+    "breast", "breasts", "thigh", "thighs", "wing", "wings", "leg", "legs",
+    "fillet", "fillets", "yolk", "yolks", "whites",
+]);
+
+function containedAt(longer: string[], shorter: string[]): number {
+    for (let start = 0; start + shorter.length <= longer.length; start += 1) {
+        if (shorter.every((token, i) => longer[start + i] === token)) {
+            return start;
+        }
+    }
+    return -1;
+}
+
+/**
+ * Compara por expressão inteira. Os nomes são iguais, ou um contém o outro e
+ * as palavras que sobram são apenas descritores neutros. Assim "egg" não casa
+ * com "eggplant", e "milk" não casa com "coconut milk" nem "condensed milk".
+ */
+function ingredientNamesMatch(pantryName: string, ingredient: string): boolean {
+    const a = normalize(pantryName).split(" ").filter(Boolean);
+    const b = normalize(ingredient).split(" ").filter(Boolean);
+
+    if (!a.length || !b.length) return false;
+    if (a.length === b.length && a.every((token, i) => token === b[i])) {
+        return true;
+    }
+
+    const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+    const at = containedAt(longer, shorter);
+    if (at < 0) return false;
+
+    return longer
+        .filter((_, index) => index < at || index >= at + shorter.length)
+        .every((token) => NEUTRAL_DESCRIPTORS.has(token));
+}
+
 function ingredientMatches(pantryNames: string[], ingredient: string): boolean {
-    const normalizedIngredient = normalize(ingredient);
-
-    return pantryNames.some((pantryName) => {
-        const normalizedPantry = normalize(pantryName);
-
-        // Compara expressões inteiras: "egg" não corresponde a "eggplant".
-        return (
-            normalizedIngredient === normalizedPantry ||
-            ` ${normalizedIngredient} `.includes(` ${normalizedPantry} `) ||
-            ` ${normalizedPantry} `.includes(` ${normalizedIngredient} `)
-        );
-    });
+    return pantryNames.some((pantryName) =>
+        ingredientNamesMatch(pantryName, ingredient),
+    );
 }
 
 /**

@@ -28,6 +28,7 @@ import { convertQuantity, roundQuantity } from "../utils/measurement";
 import { formatMeasurement } from "./chat.presentation";
 import {
     hasStockMutationIntent,
+    isConsultationMessage,
     mentionsAppTopic,
     resolveRecipeOrdinal,
 } from "./chat.intent";
@@ -550,6 +551,26 @@ export function createChatService(dependencies: ChatDependencies = {}) {
 
         if (pending) {
             if (pending.type === "create_food_draft") {
+                // Pergunta no meio do cadastro ("o que tenho na geladeira?"):
+                // responde sem preencher campos e retoma o cadastro em seguida.
+                if (isConsultationMessage(text)) {
+                    const answer = await answerFreeText(userId, text);
+                    const stillPending = await getPendingAction(userId);
+
+                    if (stillPending?.type === "create_food_draft") {
+                        const reply = [
+                            answer.reply,
+                            "",
+                            `Seguimos com o cadastro${stillPending.data.name ? ` de **${stillPending.data.name}**` : ""}: ${createDraftQuestion(stillPending.data)}`,
+                        ].join("\n");
+                        await saveMessage(userId, "assistant", reply);
+                        return { ...answer, reply, pending: false };
+                    }
+
+                    await saveMessage(userId, "assistant", answer.reply);
+                    return answer;
+                }
+
                 const continued = await continueCreateDraft(
                     userId,
                     pending,
@@ -588,10 +609,22 @@ export function createChatService(dependencies: ChatDependencies = {}) {
             };
         }
 
-        if (!pending && isCancellationMessage(text)) {
+        const response = await answerFreeText(userId, text);
+        await saveMessage(userId, "assistant", response.reply);
+        return response;
+    }
+
+    /**
+     * Interpreta uma mensagem livre (consultas, receitas, ações via modelo).
+     * Não grava a resposta do assistente: quem chama grava uma única vez.
+     */
+    async function answerFreeText(
+        userId: number,
+        text: string,
+    ): Promise<ChatResponse> {
+        if (isCancellationMessage(text)) {
             await setRecipeContext(userId, []);
             const reply = "Tudo bem. Nenhuma alteração foi feita.";
-            await saveMessage(userId, "assistant", reply);
             return {
                 reply,
                 changed: false,
@@ -622,7 +655,6 @@ export function createChatService(dependencies: ChatDependencies = {}) {
                 text,
             );
             const reply = result.directReply ?? unsupportedRequestReply();
-            await saveMessage(userId, "assistant", reply);
             return {
                 reply,
                 changed: false,
@@ -644,7 +676,6 @@ export function createChatService(dependencies: ChatDependencies = {}) {
             );
 
             if (result.directReply) {
-                await saveMessage(userId, "assistant", result.directReply);
 
                 return {
                     reply: result.directReply,
@@ -667,7 +698,6 @@ export function createChatService(dependencies: ChatDependencies = {}) {
                 text,
             );
             if (result.directReply) {
-                await saveMessage(userId, "assistant", result.directReply);
                 return {
                     reply: result.directReply,
                     changed: false,
@@ -687,7 +717,6 @@ export function createChatService(dependencies: ChatDependencies = {}) {
             );
 
             if (result.directReply) {
-                await saveMessage(userId, "assistant", result.directReply);
 
                 return {
                     reply: result.directReply,
@@ -726,7 +755,6 @@ export function createChatService(dependencies: ChatDependencies = {}) {
             );
 
             if (result.directReply) {
-                await saveMessage(userId, "assistant", result.directReply);
 
                 return {
                     reply: result.directReply,
@@ -786,7 +814,6 @@ export function createChatService(dependencies: ChatDependencies = {}) {
                 const result = await handleTool(userId, call.name!, args, text);
 
                 if (result.directReply) {
-                    await saveMessage(userId, "assistant", result.directReply);
 
                     const readyForConfirmation =
                         result.pending?.type !== "create_food_draft" &&
@@ -819,7 +846,6 @@ export function createChatService(dependencies: ChatDependencies = {}) {
 
         const reply = outputText(response) || unsupportedRequestReply();
 
-        await saveMessage(userId, "assistant", reply);
 
         return {
             reply,

@@ -12,10 +12,11 @@ import type {
 import type { CreateFood } from "../interfaces/create-food.interface";
 import {
     normalizeText as normalize,
-    extractPositiveNumber,
     extractStorageLocation,
     extractUnitFromMessage,
     messageMentionsPackaging,
+    resolveQuantity,
+    ZERO_QUANTITY_REPLY,
     hasNegativeQuantity,
     nameAppearsInMessage,
     parseDateInput,
@@ -28,9 +29,11 @@ import {
 import { daysUntilExpiration } from "../utils/expiration";
 import {
     canonicalFoodName,
+    describeGroupChoices,
     findFoodByName,
     foodGroupsMentioned,
     planConsumptionAcrossBatches,
+    relatedStockNote,
 } from "./chat.stock";
 import {
     asDateOnly,
@@ -342,16 +345,12 @@ export function createToolHandler(
             const foodName = frozenQualifier
                 ? `${modelName} ${frozenQualifier}`
                 : modelName;
-            const parsedQuantity = extractPositiveNumber(userMessage);
-            const modelQuantity =
-                args.quantity == null ? null : Number(args.quantity);
-            const quantity =
-                parsedQuantity ??
-                (modelQuantity !== null &&
-                Number.isFinite(modelQuantity) &&
-                modelQuantity > 0
-                    ? modelQuantity
-                    : null);
+            // Só vale a quantidade que o usuário escreveu: o valor do modelo é
+            // ignorado se não aparecer na mensagem.
+            const { quantity, zero: zeroQuantity } = resolveQuantity(
+                userMessage,
+                args.quantity,
+            );
             const explicitUnit = extractUnitFromMessage(userMessage);
             const modelUnit =
                 args.unit == null
@@ -414,15 +413,14 @@ export function createToolHandler(
 
             await setPendingAction(userId, draftPending);
 
-            if (hasNegativeQuantity(userMessage)) {
+            if (hasNegativeQuantity(userMessage) || zeroQuantity) {
                 return {
                     output: {
                         needsInformation: true,
                         missingField: "quantity",
                     },
                     pending: draftPending,
-                    directReply:
-                        "A quantidade deve ser maior que zero. Informe uma quantidade válida.",
+                    directReply: ZERO_QUANTITY_REPLY,
                     directActions: [],
                 };
             }
@@ -460,16 +458,19 @@ export function createToolHandler(
         const targetName = String(args.name ?? "").trim();
 
         if (name === "consume_food") {
-            if (hasNegativeQuantity(userMessage)) {
+            const resolved = resolveQuantity(userMessage, args.quantity);
+
+            if (
+                hasNegativeQuantity(userMessage) ||
+                (resolved.zero && args.wholeDiscard !== true)
+            ) {
                 return {
                     output: { error: "A quantidade deve ser maior que zero." },
                     directReply: "A quantidade deve ser maior que zero.",
                 };
             }
 
-            const parsedQuantity = extractPositiveNumber(userMessage);
-            const modelQuantity = Number(args.quantity);
-            let quantity = parsedQuantity ?? modelQuantity;
+            let quantity: number = resolved.quantity ?? NaN;
             const parsedUnit = extractUnitFromMessage(userMessage);
             const modelUnit =
                 args.unit == null
@@ -511,8 +512,7 @@ export function createToolHandler(
                             .map((group) => group[0]?.name)
                             .filter(Boolean),
                     },
-                    directReply:
-                        "Encontrei mais de um alimento possível. Informe o nome com mais detalhes.",
+                    directReply: describeGroupChoices(matchingGroups),
                 };
             }
 
@@ -594,9 +594,12 @@ export function createToolHandler(
             );
 
             if ("error" in plan) {
+                const reply = plan.insufficient
+                    ? plan.error + relatedStockNote(foods, group)
+                    : plan.error;
                 return {
                     output: { error: plan.error },
-                    directReply: plan.error,
+                    directReply: reply,
                 };
             }
 
@@ -775,8 +778,30 @@ export function createToolHandler(
                 };
             }
 
-            let quantity =
-                args.quantity == null ? food.quantity : Number(args.quantity);
+            if (hasNegativeQuantity(userMessage)) {
+                return {
+                    output: {
+                        error: "A quantidade deve ser maior que zero.",
+                    },
+                    directReply: "A quantidade deve ser maior que zero.",
+                };
+            }
+
+            const resolvedUpdate = resolveQuantity(userMessage, args.quantity);
+            if (resolvedUpdate.zero && args.quantity != null) {
+                return {
+                    output: {
+                        error: "A quantidade deve ser maior que zero.",
+                    },
+                    directReply: "A quantidade deve ser maior que zero.",
+                };
+            }
+
+            // Se o modelo enviou uma quantidade que o usuário não escreveu,
+            // ela é descartada e o estoque atual é mantido.
+            const requestedQuantity =
+                args.quantity == null ? null : resolvedUpdate.quantity;
+            let quantity = requestedQuantity ?? food.quantity;
 
             if (!Number.isFinite(quantity) || quantity <= 0) {
                 return {
@@ -789,7 +814,7 @@ export function createToolHandler(
 
             if (
                 args.unit != null &&
-                args.quantity == null &&
+                requestedQuantity === null &&
                 requestedUnit !== currentUnit
             ) {
                 const converted = convertQuantity(

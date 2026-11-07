@@ -252,3 +252,48 @@ test("Validade próxima favorece o ingrediente urgente quando as urgências dife
         1,
     );
 });
+
+test("Leite não casa com leite de coco nem leite condensado", () => {
+    const recipes = [
+        recipe("1", "Curry de coco", ["Coconut Milk", "Rice"]),
+        recipe("2", "Brigadeiro", ["Condensed Milk", "Butter"]),
+        recipe("3", "Panqueca", ["Milk", "Flour", "Egg"]),
+    ];
+    const ranked = rankRecipesWithML([food("leite")], recipes, recipes.length);
+
+    assertEqual(
+        "Só a receita com leite comum é recomendada",
+        ranked.map((item) => item.idMeal).join(","),
+        "3",
+    );
+});
+
+test("Leite de coco casa com coconut milk e não com milk", () => {
+    const recipes = [
+        recipe("1", "Curry de coco", ["Coconut Milk", "Rice"]),
+        recipe("3", "Panqueca", ["Milk", "Flour", "Egg"]),
+    ];
+    const ranked = rankRecipesWithML(
+        [food("leite de coco")],
+        recipes,
+        recipes.length,
+    );
+
+    assertEqual(
+        "Só a receita com leite de coco é recomendada",
+        ranked.map((item) => item.idMeal).join(","),
+        "1",
+    );
+});
+
+test("Variações neutras continuam casando (leite integral, peito de frango)", () => {
+    const recipes = [
+        recipe("3", "Panqueca", ["Milk", "Flour"]),
+        recipe("4", "Frango grelhado", ["Chicken Breast", "Salt"]),
+    ];
+    const milk = rankRecipesWithML([food("leite integral")], recipes, 5);
+    assertEqual("Leite integral serve para 'milk'", milk[0]?.idMeal, "3");
+
+    const chicken = rankRecipesWithML([food("frango")], recipes, 5);
+    assertEqual("Frango serve para 'chicken breast'", chicken[0]?.idMeal, "4");
+});

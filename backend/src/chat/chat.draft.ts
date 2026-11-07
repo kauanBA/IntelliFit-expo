@@ -17,6 +17,8 @@ import {
     formatDateBR,
     messageMentionsPackaging,
     packagingUnitReply,
+    hasZeroQuantity,
+    ZERO_QUANTITY_REPLY,
 } from "./chat.validation";
 import {
     normalizeMeasurementUnit,
@@ -271,16 +273,13 @@ export function createDraftFlow(
         }
 
         if (!data.quantity) {
-            if (hasNegativeQuantity(message)) {
+            if (hasNegativeQuantity(message) || hasZeroQuantity(message)) {
                 await setPendingAction(userId, {
                     type: "create_food_draft",
                     data,
                 });
 
-                return {
-                    reply: "A quantidade deve ser maior que zero. Informe uma quantidade válida.",
-                    ready: false,
-                };
+                return { reply: ZERO_QUANTITY_REPLY, ready: false };
             }
 
             const quantity = extractPositiveNumber(message);
