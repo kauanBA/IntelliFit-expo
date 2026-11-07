@@ -56,7 +56,9 @@ const PACKAGING_WORDS = new Set([
     "lata",
     "latas",
     "garrafa",
-    "garrafas"
+    "garrafas",
+    "duzia",
+    "duzias"
 ]);
 
 export function mentionsPackaging(text: string | null | undefined): boolean {

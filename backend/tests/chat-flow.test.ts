@@ -22,6 +22,7 @@ function fixture(
     duplicate = false,
     existingOverrides: Partial<Food> = {},
     duplicateLocation?: Food["storageLocation"],
+    extraFoods: Food[] = [],
 ) {
     const states = new Map<number, PendingAction | null>();
     const messages: Array<{ userId: number; role: string; content: string }> =
@@ -79,7 +80,7 @@ function fixture(
                                 expirationDate: new Date(future(12)),
                             },
                         ]
-                      : [existing],
+                      : [existing, ...extraFoods],
             createFood: async (userId, data) => {
                 writes++;
                 return {
@@ -501,7 +502,7 @@ test("Cadastro em caixas não grava: pede quantidade e unidade padronizadas", as
         },
     });
     const first = await f.service.sendChatMessage(1, "comprei 8 caixas de ovos");
-    assert.match(first.reply, /caixa, pacote, lata ou garrafa/);
+    assert.match(first.reply, /caixa, pacote, lata, garrafa ou dúzia/);
     assert.match(first.reply, /un, g ou kg/);
     const afterFirst = f.states.get(1);
     assert.equal(afterFirst?.type, "create_food_draft");
@@ -530,7 +531,7 @@ test("Embalagem repetida durante o rascunho continua pedindo uma unidade padroni
         data: { name: "leite", quantity: 2 },
     });
     const result = await f.service.sendChatMessage(1, "caixa");
-    assert.match(result.reply, /caixa, pacote, lata ou garrafa/);
+    assert.match(result.reply, /caixa, pacote, lata, garrafa ou dúzia/);
     assert.match(result.reply, /un, g, kg, ml ou L/);
     const state = f.states.get(1);
     if (state?.type === "create_food_draft") {
@@ -554,5 +555,166 @@ test("Baixa em caixa pede a quantidade na unidade cadastrada, sem alterar estoqu
     assert.match(result.reply, /unidade cadastrada/);
     assert.match(result.reply, /\*\*L\*\*/);
     assert.equal(result.changed, false);
+    assert.equal(f.writes(), 0);
+});
+
+// ---------- Quantidade nunca é inventada ----------
+
+test("Quantidade do modelo que não está na mensagem é descartada", async () => {
+    const f = fixture(undefined, {
+        name: "create_food",
+        args: {
+            name: "tomate",
+            quantity: 0.0239,
+            unit: "un",
+            storageLocation: null,
+            expirationDate: null,
+        },
+    });
+    const result = await f.service.sendChatMessage(1, "comprei tomate");
+    assert.match(result.reply, /Qual é a quantidade/);
+    const state = f.states.get(1);
+    assert.equal(state?.type, "create_food_draft");
+    if (state?.type === "create_food_draft") {
+        assert.equal(state.data.quantity, undefined);
+    }
+    assert.equal(f.writes(), 0);
+});
+
+test("Quantidade zero é rejeitada na hora, mesmo que o modelo sugira outro valor", async () => {
+    const f = fixture(undefined, {
+        name: "create_food",
+        args: {
+            name: "tomate",
+            quantity: 0.0239,
+            unit: "un",
+            storageLocation: null,
+            expirationDate: null,
+        },
+    });
+    const result = await f.service.sendChatMessage(1, "comprei 0 tomates");
+    assert.match(result.reply, /maior que zero/);
+    const state = f.states.get(1);
+    if (state?.type === "create_food_draft") {
+        assert.equal(state.data.quantity, undefined);
+    }
+});
+
+test("Zero digitado durante o rascunho também é rejeitado", async () => {
+    const f = fixture();
+    f.states.set(1, {
+        type: "create_food_draft",
+        data: { name: "tomate" },
+    });
+    const result = await f.service.sendChatMessage(1, "0");
+    assert.match(result.reply, /maior que zero/);
+    const state = f.states.get(1);
+    if (state?.type === "create_food_draft") {
+        assert.equal(state.data.quantity, undefined);
+    }
+});
+
+test("Baixa com zero não altera o estoque", async () => {
+    const f = fixture(
+        undefined,
+        {
+            name: "consume_food",
+            args: { name: "leite", quantity: 0.5, unit: "L" },
+        },
+        false,
+        false,
+        { name: "leite", quantity: 8, unit: "L" },
+    );
+    const result = await f.service.sendChatMessage(1, "tomei 0 litros de leite");
+    assert.match(result.reply, /maior que zero/);
+    assert.equal(f.writes(), 0);
+    assert.equal(f.states.get(1) ?? null, null);
+});
+
+// ---------- Mudança de assunto durante um cadastro ----------
+
+test("Consulta durante o cadastro não preenche campos e retoma o cadastro", async () => {
+    const f = fixture();
+    f.states.set(1, {
+        type: "create_food_draft",
+        data: { name: "tomate", quantity: 3, unit: "un" },
+    });
+    const result = await f.service.sendChatMessage(
+        1,
+        "O que tenho na geladeira?",
+    );
+    assert.match(result.reply, /ovos/i);
+    assert.match(result.reply, /Seguimos com o cadastro de \*\*tomate\*\*/);
+    const state = f.states.get(1);
+    assert.equal(state?.type, "create_food_draft");
+    if (state?.type === "create_food_draft") {
+        assert.equal(state.data.storageLocation, undefined);
+        assert.equal(state.data.quantity, 3);
+    }
+
+    // A resposta curta seguinte continua o cadastro normalmente.
+    await f.service.sendChatMessage(1, "geladeira");
+    const after = f.states.get(1);
+    if (after?.type === "create_food_draft") {
+        assert.equal(after.data.storageLocation, "GELADEIRA");
+    }
+});
+
+// ---------- Saldo insuficiente e tipos parecidos ----------
+
+function twoEggTypes() {
+    const caipira: Food = {
+        id: 9,
+        userId: 1,
+        name: "ovos caipiras",
+        category: "Outros",
+        quantity: 3,
+        unit: "un",
+        storageLocation: "GELADEIRA",
+        expirationDate: new Date(`${future(10)}T12:00:00Z`),
+        createdAt: new Date(),
+    };
+    return { comum: { name: "ovos comuns", quantity: 5 }, caipira };
+}
+
+test("Saldo insuficiente diz o alimento e não soma tipos diferentes", async () => {
+    const { comum, caipira } = twoEggTypes();
+    const f = fixture(
+        undefined,
+        {
+            name: "consume_food",
+            args: { name: "ovos comuns", quantity: 8, unit: "un" },
+        },
+        false,
+        false,
+        comum,
+        undefined,
+        [caipira],
+    );
+    const result = await f.service.sendChatMessage(1, "usei 8 ovos comuns");
+    assert.match(result.reply, /possui apenas \*\*5 ovos comuns\*\*/);
+    assert.match(result.reply, /você também tem \*\*ovos caipiras\*\* \(3 un\)/i);
+    assert.equal(f.writes(), 0);
+    assert.equal(f.states.get(1) ?? null, null);
+});
+
+test("Pedido genérico com dois tipos lista cada um com o saldo", async () => {
+    const { comum, caipira } = twoEggTypes();
+    const f = fixture(
+        undefined,
+        {
+            name: "consume_food",
+            args: { name: "ovos", quantity: 2, unit: "un" },
+        },
+        false,
+        false,
+        comum,
+        undefined,
+        [caipira],
+    );
+    const result = await f.service.sendChatMessage(1, "usei 2 ovos");
+    assert.match(result.reply, /\*\*ovos caipiras\*\* \(3 un\)/);
+    assert.match(result.reply, /\*\*ovos comuns\*\* \(5 un\)/);
+    assert.match(result.reply, /Informe qual/);
     assert.equal(f.writes(), 0);
 });

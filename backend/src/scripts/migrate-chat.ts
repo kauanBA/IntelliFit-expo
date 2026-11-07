@@ -3,7 +3,11 @@ import path from "path";
 import { pool } from "../config/database";
 
 async function main() {
-    const migrations = ["migration-ai-chat.sql", "migration-standard-units.sql"];
+    const migrations = [
+        "migration-ai-chat.sql",
+        "migration-standard-units.sql",
+        "migration-quantity-precision.sql",
+    ];
 
     try {
         for (const file of migrations) {

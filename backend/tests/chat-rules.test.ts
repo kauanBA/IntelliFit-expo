@@ -5,12 +5,16 @@ import {
     extractStorageLocation,
     extractUnitFromMessage,
     hasNegativeQuantity,
+    hasZeroQuantity,
     isCancellationMessage,
     isConfirmationMessage,
     normalizeUnit,
     parseDateInput,
+    quantityMentionedInMessage,
+    resolveQuantity,
     unitsEquivalent,
 } from "../src/chat/chat.validation";
+import { isConsultationMessage } from "../src/chat/chat.intent";
 import {
     convertQuantity,
     mentionsPackaging,
@@ -485,3 +489,54 @@ for (const [question, start, end] of [
         throw new Error(`Intervalo incorreto para ${question}`);
     }
 }
+
+// ---------- Quantidade: só vale o que o usuário escreveu ----------
+
+assertEqual("Zero é detectado", hasZeroQuantity("comprei 0 tomates"), true);
+assertEqual("Zero com unidade é detectado", hasZeroQuantity("0 kg"), true);
+assertEqual("Zero por extenso com unidade", hasZeroQuantity("zero kg de arroz"), true);
+assertEqual("0,5 não é zero", hasZeroQuantity("0,5 kg"), false);
+assertEqual("Data com zero não é quantidade", hasZeroQuantity("vence em 05/11/2026"), false);
+assertEqual("Produto 'zero' não é quantidade zero", hasZeroQuantity("comprei 2 coca zero"), false);
+assertEqual("Leite zero lactose não é quantidade zero", hasZeroQuantity("comprei leite zero lactose"), false);
+
+assertEqual(
+    "Número do modelo ausente na mensagem é descartado",
+    resolveQuantity("comprei tomate", 0.0239).quantity,
+    null,
+);
+assertEqual(
+    "Número que o usuário escreveu é mantido",
+    resolveQuantity("comprei 3 tomates", 0.0239).quantity,
+    3,
+);
+assertEqual(
+    "Zero vence o valor sugerido pelo modelo",
+    resolveQuantity("comprei 0 tomates", 5).zero,
+    true,
+);
+assertEqual(
+    "Meio litro é aceito quando o modelo converte para 0,5",
+    resolveQuantity("tomei meio litro de leite", 0.5).quantity,
+    0.5,
+);
+assertEqual(
+    "Dia de uma data não conta como quantidade",
+    quantityMentionedInMessage(10, "vence 10/11/2026"),
+    false,
+);
+assertEqual(
+    "Decimal com vírgula é reconhecido",
+    quantityMentionedInMessage(1.5, "comprei 1,5 kg de frango"),
+    true,
+);
+assertEqual("Dúzia não é unidade de estoque", mentionsPackaging("uma dúzia de ovos"), true);
+
+// ---------- Consulta no meio de outra conversa ----------
+
+assertEqual("Pergunta sobre a geladeira é consulta", isConsultationMessage("O que tenho na geladeira?"), true);
+assertEqual("Pergunta sobre receitas é consulta", isConsultationMessage("quais receitas posso fazer?"), true);
+assertEqual("Resposta curta não é consulta", isConsultationMessage("geladeira"), false);
+assertEqual("Quantidade não é consulta", isConsultationMessage("2 kg"), false);
+assertEqual("Informar quantidade não é consulta", isConsultationMessage("tenho 3 tomates"), false);
+assertEqual("Cadastro não é consulta", isConsultationMessage("comprei leite"), false);

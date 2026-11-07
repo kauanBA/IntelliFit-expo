@@ -60,3 +60,22 @@ export function resolveRecipeOrdinal(message: string, size: number): number {
     }
     return -1;
 }
+
+
+/**
+ * Pergunta ou consulta feita no meio de outra conversa (por exemplo, durante
+ * um cadastro): "O que tenho na geladeira?", "Quais receitas posso fazer?".
+ * Não inclui verbos que alteram o estoque nem respostas curtas como "geladeira".
+ */
+const QUESTION_START =
+    /^(o que|oque|que|quais|qual|quanto|quantos|quantas|quando|como|onde|me (?:mostr\w+|diga|fale|fala|list\w+)|mostr\w+|list\w+|resumo|ver)\b/;
+
+export function isConsultationMessage(message: string): boolean {
+    if (hasStockMutationIntent(message)) return false;
+
+    const text = normalizeText(message);
+    if (!text) return false;
+    if (QUESTION_START.test(text)) return true;
+
+    return message.includes("?") && text.split(" ").length >= 3;
+}

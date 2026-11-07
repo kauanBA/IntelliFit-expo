@@ -55,6 +55,12 @@ export class FoodService {
             throw new Error("A quantidade deve ser maior que zero.");
         }
 
+        // O banco guarda 4 casas decimais: recusa em vez de arredondar em silêncio.
+        const scaled = Number(food.quantity) * 10_000;
+        if (Math.abs(scaled - Math.round(scaled)) > 1e-6) {
+            throw new Error("A quantidade aceita no máximo 4 casas decimais.");
+        }
+
         const unit = normalizeMeasurementUnit(food.unit);
 
         if (!unit) {

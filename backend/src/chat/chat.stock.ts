@@ -1,4 +1,4 @@
-import { formatMeasurement } from "./chat.presentation";
+import { formatMeasurement, formatQuantity } from "./chat.presentation";
 import { Food } from "../interfaces/food.interface";
 import { daysUntilExpiration } from "../utils/expiration";
 import {
@@ -47,6 +47,85 @@ export function canonicalFoodName(value: string): string {
                     : token),
         )
         .join(" ");
+}
+
+/**
+ * "5 ovos comuns", "2 L de leite", "6 un de tomate": o nome do alimento
+ * sempre acompanha a quantidade, para não misturar tipos parecidos.
+ */
+export function describeAmount(
+    name: string,
+    quantity: number,
+    unit: string,
+): string {
+    const firstWord = normalizeText(name).split(" ")[0] ?? "";
+    if (unit === "un" && firstWord.length > 2 && firstWord.endsWith("s")) {
+        return `${formatQuantity(quantity, 4)} ${name}`;
+    }
+    return `${formatMeasurement(quantity, unit)} de ${name}`;
+}
+
+function groupBalance(group: Food[]): string | null {
+    const units = new Set(
+        group.map((food) => normalizeMeasurementUnit(food.unit)),
+    );
+    const [unit] = Array.from(units);
+    if (units.size !== 1 || !unit) return null;
+    const total = group.reduce((sum, food) => sum + food.quantity, 0);
+    return formatMeasurement(roundQuantity(total), unit);
+}
+
+/** Lista os tipos encontrados com o saldo de cada um, para o usuário escolher. */
+export function describeGroupChoices(groups: Food[][]): string {
+    const labels = groups
+        .map((group) => {
+            const balance = groupBalance(group);
+            return balance
+                ? `**${group[0].name}** (${balance})`
+                : `**${group[0].name}**`;
+        })
+        .sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+    const list =
+        labels.length > 1
+            ? `${labels.slice(0, -1).join(", ")} e ${labels[labels.length - 1]}`
+            : labels[0];
+
+    return `Encontrei mais de um alimento possível: ${list}. Informe qual deles deseja usar.`;
+}
+
+/**
+ * Tipos parecidos (ex.: ovos comuns x ovos caipiras) são alimentos separados.
+ * Quando o saldo de um não basta, avisa que o outro existe mas não foi somado.
+ */
+export function relatedStockNote(foods: Food[], group: Food[]): string {
+    const key = canonicalFoodName(group[0].name);
+    const head = significantTokens(key)[0];
+    if (!head) return "";
+
+    const related = new Map<string, Food[]>();
+    for (const food of foods) {
+        const otherKey = canonicalFoodName(food.name);
+        if (
+            otherKey === key ||
+            food.quantity <= 0 ||
+            daysUntilExpiration(food.expirationDate) < 0 ||
+            !significantTokens(otherKey).includes(head)
+        ) {
+            continue;
+        }
+        related.set(otherKey, [...(related.get(otherKey) ?? []), food]);
+    }
+    if (!related.size) return "";
+
+    const labels = Array.from(related.values()).map((items) => {
+        const balance = groupBalance(items);
+        return balance
+            ? `**${items[0].name}** (${balance})`
+            : `**${items[0].name}**`;
+    });
+
+    return `\n\nVocê também tem ${labels.join(", ")}, mas é outro tipo de alimento e não entra nesse saldo.`;
 }
 
 function significantTokens(value: string): string[] {
@@ -145,7 +224,7 @@ export function planConsumptionAcrossBatches(
     quantity: number,
     requestedUnit?: string | null,
     options?: { includeExpired?: boolean },
-): BatchConsumptionPlan | { error: string } {
+): BatchConsumptionPlan | { error: string; insufficient?: boolean } {
     if (!Number.isFinite(quantity) || quantity <= 0) {
         return { error: "A quantidade deve ser maior que zero." };
     }
@@ -243,10 +322,17 @@ export function planConsumptionAcrossBatches(
     }, 0);
 
     if (quantity > beforeTotal + 1e-9) {
+        const asked = formatMeasurement(roundQuantity(quantity), unit);
+        const have = describeAmount(
+            eligible[0].name,
+            roundQuantity(beforeTotal),
+            unit,
+        );
         return {
+            insufficient: true,
             error: includeExpired
-                ? `Não é possível dar baixa em ${roundQuantity(quantity)} ${unit}: o saldo disponível é de apenas ${roundQuantity(beforeTotal)} ${unit}.`
-                : `Não é possível registrar o consumo de ${roundQuantity(quantity)} ${unit}: você possui apenas ${roundQuantity(beforeTotal)} ${unit}${expiredIgnored > 0 ? " dentro da validade. Os vencidos ficam fora desse saldo." : " no estoque."}`,
+                ? `Não é possível dar baixa em ${asked}: você possui apenas **${have}** para descartar.`
+                : `Saldo insuficiente: você pediu ${asked}, mas possui apenas **${have}**${expiredIgnored > 0 ? " dentro da validade. Os vencidos ficam fora desse saldo." : " no estoque."}`,
         };
     }
 

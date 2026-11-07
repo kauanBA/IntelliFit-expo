@@ -134,7 +134,7 @@ export function packagingUnitReply(
     example: string,
 ): string {
     return (
-        "Não controlo o estoque por caixa, pacote, lata ou garrafa. " +
+        "Não controlo o estoque por caixa, pacote, lata, garrafa ou dúzia. " +
         `Informe a quantidade total em ${options}. Ex.: ${example}.`
     );
 }
@@ -235,6 +235,100 @@ export function extractPositiveNumber(message: string): number | null {
 
     return null;
 }
+
+const QUANTITY_UNIT_LOOKAHEAD =
+    "(?=\\s*(?:kg|g|ml|l|un|und|unidade|unidades)?(?:\\s|$))";
+
+function withoutDates(message: string): string {
+    return message
+        .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ")
+        .replace(/\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}\b/g, " ")
+        .replace(/(?:^|\D)\d{8}(?:\D|$)/g, " ");
+}
+
+/**
+ * A quantidade informada é zero ("0", "0 kg", "zero kg")? Só vale quando a
+ * mensagem não traz nenhuma quantidade positiva, para não confundir produtos
+ * como "refrigerante zero" ou "leite zero lactose".
+ */
+export function hasZeroQuantity(message: string): boolean {
+    if (extractPositiveNumber(message) !== null) {
+        return false;
+    }
+
+    const numeric = new RegExp(
+        `(?:^|\\s)(\\d+(?:[.,]\\d+)?)${QUANTITY_UNIT_LOOKAHEAD}`,
+        "gi",
+    );
+    for (const match of withoutDates(message).matchAll(numeric)) {
+        if (Number(match[1].replace(",", ".")) === 0) {
+            return true;
+        }
+    }
+
+    const text = normalizeText(message);
+    return (
+        text === "zero" ||
+        /\bzero\s+(?:kg|g|ml|l|un|und|unidades?|litros?|quilos?|gramas?)\b/.test(
+            text,
+        )
+    );
+}
+
+/** O valor aparece, como número ou por extenso, na mensagem do usuário? */
+export function quantityMentionedInMessage(
+    value: number,
+    message: string,
+): boolean {
+    if (!Number.isFinite(value) || value <= 0) {
+        return false;
+    }
+
+    const same = (candidate: number) => Math.abs(candidate - value) < 1e-9;
+    const cleaned = withoutDates(message);
+
+    for (const match of cleaned.matchAll(/\d+(?:[.,]\d+)?/g)) {
+        if (same(Number(match[0].replace(",", ".")))) {
+            return true;
+        }
+    }
+
+    const words = normalizeText(cleaned).split(" ");
+    return words.some(
+        (word) =>
+            (word in numberWords && same(numberWords[word])) ||
+            ((word === "meio" || word === "meia") && same(0.5)),
+    );
+}
+
+/**
+ * Define a quantidade da mensagem. Só o que o usuário escreveu vale: o valor
+ * sugerido pelo modelo é aceito apenas se aparecer na mensagem, então um
+ * número inventado nunca chega ao estoque.
+ */
+export function resolveQuantity(
+    message: string,
+    modelValue?: unknown,
+): { quantity: number | null; zero: boolean } {
+    const parsed = extractPositiveNumber(message);
+    if (parsed !== null) {
+        return { quantity: parsed, zero: false };
+    }
+
+    if (hasZeroQuantity(message)) {
+        return { quantity: null, zero: true };
+    }
+
+    const candidate = modelValue == null ? NaN : Number(modelValue);
+    if (quantityMentionedInMessage(candidate, message)) {
+        return { quantity: candidate, zero: false };
+    }
+
+    return { quantity: null, zero: false };
+}
+
+export const ZERO_QUANTITY_REPLY =
+    "A quantidade deve ser maior que zero. Informe uma quantidade válida.";
 
 function toIsoDate(day: number, month: number, year: number): string | null {
     if (year < 100) {
