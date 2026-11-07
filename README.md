@@ -1,37 +1,26 @@
 # IntelliFit
 
-Aplicação web para organização e gerenciamento doméstico de alimentos.
-
-O IntelliFit permite controlar alimentos em estoque, acompanhar sua validade, encontrar receitas com base nos ingredientes disponíveis e utilizar um assistente conversacional para auxiliar na organização.
+Aplicação web para organização e gerenciamento doméstico de alimentos. Permite controlar o estoque e a validade, receber recomendações de receitas com base no que está disponível e usar um assistente conversacional para consultar e atualizar o estoque.
 
 ## Funcionalidades
 
-- Cadastro e gerenciamento de alimentos.
-- Controle de quantidade, local de armazenamento e validade.
-- Identificação de alimentos próximos do vencimento.
-- Recomendações de receitas com base no estoque.
-- Recomendação de receitas utilizando TF-IDF e similaridade do cosseno.
-- Assistente conversacional integrado à OpenAI.
-- Autenticação de usuários.
+- Cadastro, edição e remoção de alimentos, com quantidade, unidade, local de armazenamento e validade.
+- Identificação de alimentos vencidos e próximos do vencimento.
+- Recomendação de receitas a partir do estoque.
+- Assistente integrado à OpenAI que entende linguagem natural para consultar e atualizar o estoque.
+- Autenticação com JWT e perfis `USER` e `ADMIN`.
+- Área administrativa com listagem de usuários.
 - API documentada com Swagger.
 
 ## Tecnologias
 
-### Frontend
+- **Frontend:** React, TypeScript, Vite, React Router
+- **Backend:** Node.js, TypeScript, Express, PostgreSQL, JWT, Swagger
+- **Integrações:** OpenAI API e TheMealDB
 
-- React
-- TypeScript
-- Vite
-- React Router
+## Recomendação de receitas
 
-### Backend
-
-- Node.js
-- TypeScript
-- Express
-- PostgreSQL
-- OpenAI API
-- TheMealDB
+Recomendador próprio em TypeScript. As receitas são buscadas na TheMealDB e comparadas ao estoque com **TF-IDF** e **similaridade do cosseno**, selecionando os **k vizinhos mais próximos**. Os nomes e detalhes das receitas são traduzidos para pt-BR.
 
 ## Estrutura
 
@@ -39,50 +28,76 @@ O IntelliFit permite controlar alimentos em estoque, acompanhar sua validade, en
 IntelliFit/
 ├── backend/
 │   ├── src/
-│   └── tests/
-├── frontend/
-│   └── src/
-└── docs/
+│   │   ├── chat/
+│   │   ├── config/
+│   │   ├── controllers/
+│   │   ├── interfaces/
+│   │   ├── middlewares/
+│   │   ├── ml/
+│   │   ├── repositories/
+│   │   ├── routes/
+│   │   ├── scripts/
+│   │   ├── services/
+│   │   └── utils/
+│   ├── tests/
+│   ├── database.sql
+│   └── migration-*.sql
+└── frontend/
+    ├── public/
+    └── src/
+        ├── assets/
+        ├── components/
+        ├── pages/
+        ├── services/
+        ├── styles/
+        └── utils/
 ```
 
 ## Requisitos
 
-- Node.js 22.12+
+- Node.js 22.12 ou superior
 - npm
 - PostgreSQL
+- Chave da API da OpenAI (apenas para o assistente)
 
 ## Instalação
 
 ### 1. Banco de dados
 
-Crie um banco PostgreSQL chamado `intellifit` e execute o arquivo:
-
-```text
-backend/database.sql
+```bash
+psql -U postgres -c "CREATE DATABASE intellifit;"
+psql -U postgres -d intellifit -f backend/database.sql
 ```
+
+As tabelas do chat e os ajustes de unidade e precisão são aplicados automaticamente ao executar `npm run dev` no backend.
 
 ### 2. Backend
 
 ```bash
 cd backend
 npm ci
+cp .env.example .env
 ```
 
-Configure o arquivo `.env` com as informações necessárias.
+Preencha o `.env`:
 
-Depois, execute:
+| Variável | Descrição |
+| --- | --- |
+| `DB_HOST` / `DB_PORT` | Endereço do PostgreSQL |
+| `DB_USER` / `DB_PASSWORD` | Credenciais do PostgreSQL |
+| `DB_NAME` | Nome do banco (`intellifit`) |
+| `JWT_SECRET` | Chave para assinar os tokens |
+| `OPENAI_API_KEY` | Chave da OpenAI (necessária para o chat) |
+| `OPENAI_MODEL` | Modelo usado pelo assistente |
+
+Inicie o servidor:
 
 ```bash
 npm run dev
 ```
 
-O backend será iniciado na porta `3000`.
-
-A documentação da API estará disponível em:
-
-```text
-http://localhost:3000/api-docs
-```
+- API: `http://localhost:3000`
+- Swagger: `http://localhost:3000/api-docs`
 
 ### 3. Frontend
 
@@ -94,22 +109,26 @@ npm ci
 npm run dev
 ```
 
-O Vite exibirá no terminal o endereço para acessar a aplicação, normalmente:
+Acesse o endereço exibido no terminal, normalmente `http://localhost:5173`. O backend deve estar ativo em `http://localhost:3000`.
 
-```text
-http://localhost:5173
+## Perfil administrador
+
+Todo usuário é criado como `USER`. Para torná-lo administrador:
+
+```sql
+UPDATE users SET role = 'ADMIN' WHERE email = 'seu@email.com';
 ```
 
-## Testes
+Faça login novamente para aplicar o novo perfil.
 
-Para executar as validações do backend:
+## Testes
 
 ```bash
 cd backend
 npm run validate:all
 ```
 
-Para gerar o build do frontend:
+Executa a checagem de tipos e as suítes de chat, ML e receitas. Para o frontend:
 
 ```bash
 cd frontend

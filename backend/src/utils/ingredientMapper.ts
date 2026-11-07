@@ -293,7 +293,6 @@ const ingredientMap: Record<string, string> = {
     castanha_do_pará: "brazil nuts",
     amendoim: "peanuts",
     pasta_de_amendoim: "peanut butter",
-    nozes: "walnuts",
     amêndoas: "almonds",
     pistache: "pistachio",
     avelã: "hazelnuts",
